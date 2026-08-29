@@ -19,40 +19,56 @@ export async function create({ condition, price, message }) {
     await client.Input.dispatchKeyEvent({ type: 'keyUp', key: 'a', code: 'KeyA' });
   }
 
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 1200));
 
+  // NOTE: TradingView's dialog now uses hashed CSS-module class names
+  // (e.g. "input-H0xdCnFS") with no literal "alert" substring anywhere,
+  // so the old `[class*="alert"] input[...]` selectors always matched zero
+  // elements. Instead: while the Create Alert dialog is open, it's the only
+  // visible text input on the page, so target it directly by that property.
   const priceSet = await evaluate(`
     (function() {
-      var inputs = document.querySelectorAll('[class*="alert"] input[type="text"], [class*="alert"] input[type="number"]');
-      for (var i = 0; i < inputs.length; i++) {
-        var label = inputs[i].closest('[class*="row"]')?.querySelector('[class*="label"]');
-        if (label && /value|price/i.test(label.textContent)) {
-          var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          nativeSet.call(inputs[i], '${price}');
-          inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
-          inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
-        }
-      }
-      if (inputs.length > 0) {
-        var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-        nativeSet.call(inputs[0], '${price}');
-        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        return true;
-      }
-      return false;
+      var inputs = Array.from(document.querySelectorAll('input[type="text"]')).filter(function(i) {
+        var r = i.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+      // Prefer one whose current value already looks like a price (has a decimal/comma),
+      // matching the alert dialog's auto-filled Value field. Fall back to the only candidate.
+      var target = inputs.find(function(i) { return /^[\\d,]+\\.?\\d*$/.test(i.value.trim()); }) || inputs[0];
+      if (!target) return false;
+      var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      nativeSet.call(target, '${price}');
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
     })()
   `);
 
   if (message) {
     await evaluate(`
       (function() {
-        var textarea = document.querySelector('[class*="alert"] textarea')
-          || document.querySelector('textarea[placeholder*="message"]');
+        // The Message field starts collapsed as a one-line summary
+        // ("<symbol> Crossing <price>") — click it to reveal the real textarea.
+        var summary = Array.from(document.querySelectorAll('span,div')).find(function(el) {
+          var t = (el.textContent || '').trim();
+          return t.length > 0 && t.length < 80 && /crossing|greater than|less than/i.test(t)
+            && el.children.length === 0;
+        });
+        if (summary) summary.click();
+      })()
+    `);
+    await new Promise(r => setTimeout(r, 300));
+    await evaluate(`
+      (function() {
+        var textarea = Array.from(document.querySelectorAll('textarea')).find(function(t) {
+          var r = t.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        });
         if (textarea) {
           var nativeSet = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
           nativeSet.call(textarea, ${JSON.stringify(message)});
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          textarea.dispatchEvent(new Event('change', { bubbles: true }));
         }
       })()
     `);

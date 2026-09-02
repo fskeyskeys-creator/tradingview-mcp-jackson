@@ -139,23 +139,38 @@ export async function getStrategyResults() {
         var chart = ${CHART_API}._chartWidget;
         var sources = chart.model().model().dataSources();
         var strat = null;
+        // Strategies are identified by having reportData/ordersData, not by is_price_study
+        // (a strategy declared with overlay=true has is_price_study === true).
         for (var i = 0; i < sources.length; i++) {
           var s = sources[i];
-          if (s.metaInfo && s.metaInfo().is_price_study === false && (s.reportData || s.performance)) { strat = s; break; }
+          if (s.reportData || s.ordersData) { strat = s; break; }
         }
         if (!strat) return {metrics: {}, source: 'internal_api', error: 'No strategy found on chart. Add a strategy indicator first.'};
-        var metrics = {};
-        if (strat.reportData) {
-          var rd = typeof strat.reportData === 'function' ? strat.reportData() : strat.reportData;
-          if (rd && typeof rd === 'object') {
-            if (typeof rd.value === 'function') rd = rd.value();
-            if (rd) { var keys = Object.keys(rd); for (var k = 0; k < keys.length; k++) { var val = rd[keys[k]]; if (val !== null && val !== undefined && typeof val !== 'function') metrics[keys[k]] = val; } }
+        function flattenScalars(obj, out) {
+          var keys = Object.keys(obj);
+          for (var k = 0; k < keys.length; k++) {
+            var val = obj[keys[k]];
+            var t = typeof val;
+            if (val === null || val === undefined || t === 'function') continue;
+            if (t === 'number' || t === 'string' || t === 'boolean') out[keys[k]] = val;
+            else if (t === 'object' && !Array.isArray(val)) { out[keys[k]] = {}; flattenScalars(val, out[keys[k]]); }
+            // arrays (trades, filledOrders, buyHold, marginUsage, etc.) are skipped here —
+            // use pine_get_trades / data_get_trades or data_get_equity for those.
           }
         }
-        if (Object.keys(metrics).length === 0 && strat.performance) {
-          var perf = strat.performance();
+        var metrics = {};
+        // Prefer performance() — it's already a compact summary. Fall back to reportData's
+        // scalar top-level fields (skipping large nested trade/order arrays) if unavailable.
+        if (strat.performance) {
+          var perf = typeof strat.performance === 'function' ? strat.performance() : strat.performance;
           if (perf && typeof perf.value === 'function') perf = perf.value();
-          if (perf && typeof perf === 'object') { var pkeys = Object.keys(perf); for (var p = 0; p < pkeys.length; p++) { var pval = perf[pkeys[p]]; if (pval !== null && pval !== undefined && typeof pval !== 'function') metrics[pkeys[p]] = pval; } }
+          if (perf && typeof perf === 'object') flattenScalars(perf, metrics);
+        }
+        if (Object.keys(metrics).length === 0 && strat.reportData) {
+          var rd = typeof strat.reportData === 'function' ? strat.reportData() : strat.reportData;
+          if (rd && typeof rd.value === 'function') rd = rd.value();
+          if (rd && rd.performance) flattenScalars(rd.performance, metrics);
+          else if (rd && typeof rd === 'object') flattenScalars(rd, metrics);
         }
         return {metrics: metrics, source: 'internal_api'};
       } catch(e) { return {metrics: {}, source: 'internal_api', error: e.message}; }
@@ -174,7 +189,7 @@ export async function getTrades({ max_trades } = {}) {
         var strat = null;
         for (var i = 0; i < sources.length; i++) {
           var s = sources[i];
-          if (s.metaInfo && s.metaInfo().is_price_study === false && (s.ordersData || s.reportData)) { strat = s; break; }
+          if (s.ordersData || s.reportData) { strat = s; break; }
         }
         if (!strat) return {trades: [], source: 'internal_api', error: 'No strategy found on chart.'};
         var orders = null;
@@ -210,7 +225,7 @@ export async function getEquity() {
         var strat = null;
         for (var i = 0; i < sources.length; i++) {
           var s = sources[i];
-          if (s.metaInfo && s.metaInfo().is_price_study === false && (s.reportData || s.performance)) { strat = s; break; }
+          if (s.reportData || s.ordersData) { strat = s; break; }
         }
         if (!strat) return {data: [], source: 'internal_api', error: 'No strategy found on chart.'};
         var data = [];

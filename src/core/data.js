@@ -178,12 +178,18 @@ export async function getStrategyResults({ entity_id } = {}) {
           }
         }
         var metrics = {};
-        // Prefer performance() — it's already a compact summary. Fall back to reportData's
-        // scalar top-level fields (skipping large nested trade/order arrays) if unavailable.
+        var perfWasLive = false;
+        // Prefer performance() — it's already a compact summary. It's a reactive value that's
+        // only fully populated while this strategy is the FOCUSED tab in the Strategy Tester
+        // panel; for a non-focused strategy it resolves to null even though the strategy is
+        // genuinely on the chart. Fall back to reportData's scalar fields if unavailable --
+        // but reportData turns out to mirror the same non-focused snapshot (verified live:
+        // both read as a freshly-reset 1-trade state instead of the real multi-month history),
+        // so the fallback is captured for convenience, not treated as trustworthy.
         if (strat.performance) {
           var perf = typeof strat.performance === 'function' ? strat.performance() : strat.performance;
           if (perf && typeof perf.value === 'function') perf = perf.value();
-          if (perf && typeof perf === 'object') flattenScalars(perf, metrics);
+          if (perf && typeof perf === 'object') { flattenScalars(perf, metrics); perfWasLive = true; }
         }
         if (Object.keys(metrics).length === 0 && strat.reportData) {
           var rd = typeof strat.reportData === 'function' ? strat.reportData() : strat.reportData;
@@ -192,12 +198,15 @@ export async function getStrategyResults({ entity_id } = {}) {
           else if (rd && typeof rd === 'object') flattenScalars(rd, metrics);
         }
         var ambiguous = !wantId && strategySources.length > 1;
+        var warnings = [];
+        if (ambiguous) warnings.push('Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.');
+        if (!perfWasLive) warnings.push('This strategy\\'s live performance() data is unavailable right now (seen when it is not the focused tab in the Strategy Tester panel, and possibly also when the underlying market data feed is stale -- the exact cause was not fully isolated). The metrics below came from a fallback source that mirrors a freshly-reset snapshot (few/no trades) rather than the full historical backtest, so treat them as unreliable. Check the Strategy Tester panel in the UI (click this strategy\\'s tab) and confirm live data before trusting these numbers.');
         return {metrics: metrics, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
-          warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
+          perf_data_live: perfWasLive, warning: warnings.length ? warnings.join(' ') : undefined};
       } catch(e) { return {metrics: {}, source: 'internal_api', error: e.message}; }
     })()
   `);
-  return { success: true, metric_count: Object.keys(results?.metrics || {}).length, source: results?.source, matched_entity_id: results?.matched_entity_id, warning: results?.warning, available_strategies: results?.available_strategies, metrics: results?.metrics || {}, error: results?.error };
+  return { success: true, metric_count: Object.keys(results?.metrics || {}).length, source: results?.source, matched_entity_id: results?.matched_entity_id, perf_data_live: results?.perf_data_live, warning: results?.warning, available_strategies: results?.available_strategies, metrics: results?.metrics || {}, error: results?.error };
 }
 
 export async function getTrades({ max_trades, entity_id } = {}) {
@@ -245,12 +254,26 @@ export async function getTrades({ max_trades, entity_id } = {}) {
             result.push(trade);
           }
         }
+        // ordersData() itself (like performance()) only reflects the full historical trade list
+        // while this strategy is the focused tab in the Strategy Tester panel -- for a
+        // non-focused strategy it silently returns a freshly-reset view (e.g. just the one
+        // currently-open trade) instead of erroring, so a low order count needs the same
+        // liveness signal performance() gives, checked here purely as a cross-check.
+        var perfWasLive = false;
+        if (strat.performance) {
+          var perfCheck = typeof strat.performance === 'function' ? strat.performance() : strat.performance;
+          if (perfCheck && typeof perfCheck.value === 'function') perfCheck = perfCheck.value();
+          perfWasLive = !!(perfCheck && typeof perfCheck === 'object');
+        }
+        var warnings = [];
+        if (ambiguous) warnings.push('Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.');
+        if (!perfWasLive) warnings.push('This strategy\\'s live performance() data is unavailable right now (seen when it is not the focused tab in the Strategy Tester panel, and possibly also when the underlying market data feed is stale). The trade list above may be a freshly-reset snapshot (e.g. only the currently-open trade) rather than the full history, so treat it as unreliable. Check the Strategy Tester panel in the UI before trusting these results.');
         return {trades: result, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
-          warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
+          perf_data_live: perfWasLive, warning: warnings.length ? warnings.join(' ') : undefined};
       } catch(e) { return {trades: [], source: 'internal_api', error: e.message}; }
     })()
   `);
-  return { success: true, trade_count: trades?.trades?.length || 0, source: trades?.source, matched_entity_id: trades?.matched_entity_id, warning: trades?.warning, available_strategies: trades?.available_strategies, trades: trades?.trades || [], error: trades?.error };
+  return { success: true, trade_count: trades?.trades?.length || 0, source: trades?.source, matched_entity_id: trades?.matched_entity_id, perf_data_live: trades?.perf_data_live, warning: trades?.warning, available_strategies: trades?.available_strategies, trades: trades?.trades || [], error: trades?.error };
 }
 
 export async function getEquity({ entity_id } = {}) {
@@ -293,6 +316,19 @@ export async function getEquity({ entity_id } = {}) {
             for (var i = start; i <= end; i++) { var v = bars.valueAt(i); if (v) data.push({time: v[0], equity: v[1], drawdown: v[2] || null}); }
           }
         }
+        // performance() (like elsewhere in this file) is only fully populated while this
+        // strategy is the focused tab in the Strategy Tester panel; used here purely as a
+        // liveness cross-check on whatever equity data was actually found above.
+        var perfWasLive = false;
+        if (strat.performance) {
+          var perfCheck = strat.performance();
+          if (perfCheck && typeof perfCheck.value === 'function') perfCheck = perfCheck.value();
+          perfWasLive = !!(perfCheck && typeof perfCheck === 'object');
+        }
+        var warnings = [];
+        if (ambiguous) warnings.push('Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.');
+        if (!perfWasLive) warnings.push('This strategy\\'s live performance() data is unavailable right now (seen when it is not the focused tab in the Strategy Tester panel, and possibly also when the underlying market data feed is stale). The equity data above may reflect a freshly-reset snapshot rather than the full history, so treat it as unreliable. Check the Strategy Tester panel in the UI before trusting these results.');
+        var combinedWarning = warnings.length ? warnings.join(' ') : undefined;
         if (data.length === 0) {
           var perfData = {};
           if (strat.performance) {
@@ -301,15 +337,15 @@ export async function getEquity({ entity_id } = {}) {
             if (perf && typeof perf === 'object') { var pkeys = Object.keys(perf); for (var p = 0; p < pkeys.length; p++) { if (/equity|drawdown|profit|net/i.test(pkeys[p])) perfData[pkeys[p]] = perf[pkeys[p]]; } }
           }
           if (Object.keys(perfData).length > 0) return {data: [], equity_summary: perfData, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
-            warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined,
+            perf_data_live: perfWasLive, warning: combinedWarning,
             note: 'Full equity curve not available via API; equity summary metrics returned instead.'};
         }
         return {data: data, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
-          warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
+          perf_data_live: perfWasLive, warning: combinedWarning};
       } catch(e) { return {data: [], source: 'internal_api', error: e.message}; }
     })()
   `);
-  return { success: true, data_points: equity?.data?.length || 0, source: equity?.source, matched_entity_id: equity?.matched_entity_id, warning: equity?.warning, available_strategies: equity?.available_strategies, data: equity?.data || [], equity_summary: equity?.equity_summary, note: equity?.note, error: equity?.error };
+  return { success: true, data_points: equity?.data?.length || 0, source: equity?.source, matched_entity_id: equity?.matched_entity_id, perf_data_live: equity?.perf_data_live, warning: equity?.warning, available_strategies: equity?.available_strategies, data: equity?.data || [], equity_summary: equity?.equity_summary, note: equity?.note, error: equity?.error };
 }
 
 export async function getQuote({ symbol } = {}) {

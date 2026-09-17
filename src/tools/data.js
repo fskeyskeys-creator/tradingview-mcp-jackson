@@ -18,14 +18,14 @@ export function registerDataTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_strategy_results', 'Get strategy performance metrics from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
+  server.tool('data_get_strategy_results', 'Get strategy performance metrics from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened. Also check the returned perf_data_live flag: when false, these numbers came from a fallback source that can mirror a freshly-reset snapshot instead of the full history (seen when the strategy is not the focused tab in the Strategy Tester panel, or possibly when market data is stale) — treat the result as unreliable and verify in the UI before trusting it.', {
     entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
   }, async ({ entity_id }) => {
     try { return jsonResult(await core.getStrategyResults({ entity_id })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_trades', 'Get trade list from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
+  server.tool('data_get_trades', 'Get trade list from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened. Also check the returned perf_data_live flag: when false, these numbers came from a fallback source that can mirror a freshly-reset snapshot instead of the full history (seen when the strategy is not the focused tab in the Strategy Tester panel, or possibly when market data is stale) — treat the result as unreliable and verify in the UI before trusting it.', {
     max_trades: z.coerce.number().optional().describe('Maximum trades to return'),
     entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
   }, async ({ max_trades, entity_id }) => {
@@ -33,7 +33,7 @@ export function registerDataTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_equity', 'Get equity curve data from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
+  server.tool('data_get_equity', 'Get equity curve data from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened. Also check the returned perf_data_live flag: when false, these numbers came from a fallback source that can mirror a freshly-reset snapshot instead of the full history (seen when the strategy is not the focused tab in the Strategy Tester panel, or possibly when market data is stale) — treat the result as unreliable and verify in the UI before trusting it.', {
     entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
   }, async ({ entity_id }) => {
     try { return jsonResult(await core.getEquity({ entity_id })); }

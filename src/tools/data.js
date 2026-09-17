@@ -18,20 +18,25 @@ export function registerDataTools(server) {
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_strategy_results', 'Get strategy performance metrics from Strategy Tester', {}, async () => {
-    try { return jsonResult(await core.getStrategyResults()); }
+  server.tool('data_get_strategy_results', 'Get strategy performance metrics from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
+    entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
+  }, async ({ entity_id }) => {
+    try { return jsonResult(await core.getStrategyResults({ entity_id })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_trades', 'Get trade list from Strategy Tester', {
+  server.tool('data_get_trades', 'Get trade list from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
     max_trades: z.coerce.number().optional().describe('Maximum trades to return'),
-  }, async ({ max_trades }) => {
-    try { return jsonResult(await core.getTrades({ max_trades })); }
+    entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
+  }, async ({ max_trades, entity_id }) => {
+    try { return jsonResult(await core.getTrades({ max_trades, entity_id })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
-  server.tool('data_get_equity', 'Get equity curve data from Strategy Tester', {}, async () => {
-    try { return jsonResult(await core.getEquity()); }
+  server.tool('data_get_equity', 'Get equity curve data from Strategy Tester. If multiple strategies are on the chart, pass entity_id to target one explicitly — omitting it falls back to whichever strategy happens to be first internally (not stable across add/remove operations) and the response carries a warning plus the full available_strategies list when that happened.', {
+    entity_id: z.string().optional().describe('Strategy entity ID (from chart_get_state) to target when more than one strategy is on the chart'),
+  }, async ({ entity_id }) => {
+    try { return jsonResult(await core.getEquity({ entity_id })); }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 

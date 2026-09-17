@@ -59,19 +59,26 @@ register('data', {
       handler: (opts) => core.getPineBoxes({ study_filter: opts.filter, verbose: opts.verbose }),
     }],
     ['strategy', {
-      description: 'Get strategy performance metrics',
-      handler: () => core.getStrategyResults(),
+      description: 'Get strategy performance metrics. Pass --entity-id when more than one strategy is on the chart.',
+      options: {
+        'entity-id': { type: 'string', short: 'e', description: 'Strategy entity ID to target (from chart state)' },
+      },
+      handler: (opts) => core.getStrategyResults({ entity_id: opts['entity-id'] }),
     }],
     ['trades', {
-      description: 'Get strategy trade list',
+      description: 'Get strategy trade list. Pass --entity-id when more than one strategy is on the chart.',
       options: {
         max: { type: 'string', short: 'n', description: 'Max trades to return' },
+        'entity-id': { type: 'string', short: 'e', description: 'Strategy entity ID to target (from chart state)' },
       },
-      handler: (opts) => core.getTrades({ max_trades: opts.max ? Number(opts.max) : undefined }),
+      handler: (opts) => core.getTrades({ max_trades: opts.max ? Number(opts.max) : undefined, entity_id: opts['entity-id'] }),
     }],
     ['equity', {
-      description: 'Get strategy equity curve',
-      handler: () => core.getEquity(),
+      description: 'Get strategy equity curve. Pass --entity-id when more than one strategy is on the chart.',
+      options: {
+        'entity-id': { type: 'string', short: 'e', description: 'Strategy entity ID to target (from chart state)' },
+      },
+      handler: (opts) => core.getEquity({ entity_id: opts['entity-id'] }),
     }],
     ['depth', {
       description: 'Get order book / DOM data',

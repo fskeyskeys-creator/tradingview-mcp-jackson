@@ -138,6 +138,8 @@ export async function getStrategyResults({ entity_id } = {}) {
       try {
         var chart = ${CHART_API}._chartWidget;
         var sources = chart.model().model().dataSources();
+        // s.id is a method on these internal source objects, not a plain string property.
+        function sid(s) { return typeof s.id === 'function' ? s.id() : s.id; }
         // Strategies are identified by having reportData/ordersData, not by is_price_study
         // (a strategy declared with overlay=true has is_price_study === true).
         var strategySources = [];
@@ -148,12 +150,12 @@ export async function getStrategyResults({ entity_id } = {}) {
         var available = strategySources.map(function(s) {
           var name = null;
           try { name = s.metaInfo ? (s.metaInfo().description || s.metaInfo().shortDescription) : null; } catch(e) {}
-          return { entity_id: s.id, name: name };
+          return { entity_id: sid(s), name: name };
         });
         var strat = null;
         var wantId = ${entity_id ? JSON.stringify(entity_id) : 'null'};
         if (wantId) {
-          for (var j = 0; j < strategySources.length; j++) { if (strategySources[j].id === wantId) { strat = strategySources[j]; break; } }
+          for (var j = 0; j < strategySources.length; j++) { if (sid(strategySources[j]) === wantId) { strat = strategySources[j]; break; } }
           if (!strat) return {metrics: {}, source: 'internal_api', error: 'No strategy with entity_id ' + wantId + ' found on chart.', available_strategies: available};
         } else {
           // No entity_id given: fall back to the first strategy found. dataSources() order is
@@ -190,7 +192,7 @@ export async function getStrategyResults({ entity_id } = {}) {
           else if (rd && typeof rd === 'object') flattenScalars(rd, metrics);
         }
         var ambiguous = !wantId && strategySources.length > 1;
-        return {metrics: metrics, source: 'internal_api', matched_entity_id: strat.id, available_strategies: ambiguous ? available : undefined,
+        return {metrics: metrics, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
           warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
       } catch(e) { return {metrics: {}, source: 'internal_api', error: e.message}; }
     })()
@@ -205,6 +207,7 @@ export async function getTrades({ max_trades, entity_id } = {}) {
       try {
         var chart = ${CHART_API}._chartWidget;
         var sources = chart.model().model().dataSources();
+        function sid(s) { return typeof s.id === 'function' ? s.id() : s.id; }
         var strategySources = [];
         for (var i = 0; i < sources.length; i++) {
           var s = sources[i];
@@ -213,12 +216,12 @@ export async function getTrades({ max_trades, entity_id } = {}) {
         var available = strategySources.map(function(s) {
           var name = null;
           try { name = s.metaInfo ? (s.metaInfo().description || s.metaInfo().shortDescription) : null; } catch(e) {}
-          return { entity_id: s.id, name: name };
+          return { entity_id: sid(s), name: name };
         });
         var strat = null;
         var wantId = ${entity_id ? JSON.stringify(entity_id) : 'null'};
         if (wantId) {
-          for (var j = 0; j < strategySources.length; j++) { if (strategySources[j].id === wantId) { strat = strategySources[j]; break; } }
+          for (var j = 0; j < strategySources.length; j++) { if (sid(strategySources[j]) === wantId) { strat = strategySources[j]; break; } }
           if (!strat) return {trades: [], source: 'internal_api', error: 'No strategy with entity_id ' + wantId + ' found on chart.', available_strategies: available};
         } else {
           strat = strategySources[0] || null;
@@ -242,7 +245,7 @@ export async function getTrades({ max_trades, entity_id } = {}) {
             result.push(trade);
           }
         }
-        return {trades: result, source: 'internal_api', matched_entity_id: strat.id, available_strategies: ambiguous ? available : undefined,
+        return {trades: result, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
           warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
       } catch(e) { return {trades: [], source: 'internal_api', error: e.message}; }
     })()
@@ -256,6 +259,7 @@ export async function getEquity({ entity_id } = {}) {
       try {
         var chart = ${CHART_API}._chartWidget;
         var sources = chart.model().model().dataSources();
+        function sid(s) { return typeof s.id === 'function' ? s.id() : s.id; }
         var strategySources = [];
         for (var i = 0; i < sources.length; i++) {
           var s = sources[i];
@@ -264,12 +268,12 @@ export async function getEquity({ entity_id } = {}) {
         var available = strategySources.map(function(s) {
           var name = null;
           try { name = s.metaInfo ? (s.metaInfo().description || s.metaInfo().shortDescription) : null; } catch(e) {}
-          return { entity_id: s.id, name: name };
+          return { entity_id: sid(s), name: name };
         });
         var strat = null;
         var wantId = ${entity_id ? JSON.stringify(entity_id) : 'null'};
         if (wantId) {
-          for (var j = 0; j < strategySources.length; j++) { if (strategySources[j].id === wantId) { strat = strategySources[j]; break; } }
+          for (var j = 0; j < strategySources.length; j++) { if (sid(strategySources[j]) === wantId) { strat = strategySources[j]; break; } }
           if (!strat) return {data: [], source: 'internal_api', error: 'No strategy with entity_id ' + wantId + ' found on chart.', available_strategies: available};
         } else {
           strat = strategySources[0] || null;
@@ -296,11 +300,11 @@ export async function getEquity({ entity_id } = {}) {
             if (perf && typeof perf.value === 'function') perf = perf.value();
             if (perf && typeof perf === 'object') { var pkeys = Object.keys(perf); for (var p = 0; p < pkeys.length; p++) { if (/equity|drawdown|profit|net/i.test(pkeys[p])) perfData[pkeys[p]] = perf[pkeys[p]]; } }
           }
-          if (Object.keys(perfData).length > 0) return {data: [], equity_summary: perfData, source: 'internal_api', matched_entity_id: strat.id, available_strategies: ambiguous ? available : undefined,
+          if (Object.keys(perfData).length > 0) return {data: [], equity_summary: perfData, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
             warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined,
             note: 'Full equity curve not available via API; equity summary metrics returned instead.'};
         }
-        return {data: data, source: 'internal_api', matched_entity_id: strat.id, available_strategies: ambiguous ? available : undefined,
+        return {data: data, source: 'internal_api', matched_entity_id: sid(strat), available_strategies: ambiguous ? available : undefined,
           warning: ambiguous ? 'Multiple strategies are on this chart and no entity_id was given, so the first one found was used (order is not stable). Pass entity_id to target a specific strategy.' : undefined};
       } catch(e) { return {data: [], source: 'internal_api', error: e.message}; }
     })()
